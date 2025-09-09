@@ -1,0 +1,46 @@
+{
+  "name": "service-financial-manager",
+  "version": "1.0.0",
+  "description": "API de Gerenciamento Financeiro com MongoDB",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "init-db": "node src/scripts/initDatabase.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "keywords": [
+    "financial",
+    "management",
+    "mongodb",
+    "express",
+    "api",
+    "proventos",
+    "gastos",
+    "investimentos"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.11.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "mongodb": "^6.18.0",
+    "mongoose": "^8.0.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CopacolDev/BERGAMO-service-financial-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CopacolDev/BERGAMO-service-financial-manager/issues"
+  },
+  "homepage": "https://github.com/CopacolDev/BERGAMO-service-financial-manager#readme"
+}
