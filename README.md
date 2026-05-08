@@ -1,59 +1,139 @@
-# API Monitor Backend
+# Financeiro Pessoal
 
-Backend API para o sistema de monitoramento de APIs.
+Gerenciador financeiro pessoal completo: planejamento mensal de entradas e saídas, lançamento de receitas e despesas reais, e comparativo **planejado x realizado** mês a mês.
 
-## Tecnologias
+Repositório separado em dois projetos:
 
-- Node.js
-- Express.js
-- MongoDB
-- Docker
+- [backend/](backend/) — SAP **CAP (CDS)** com SQLite
+- [frontend/](frontend/) — **React + Vite + TypeScript**, responsivo (mobile-first)
 
-## Configuração
+---
 
-### 1. Instalar dependências
+## Funcionalidades
+
+- **Grupos de contas**: organize categorias por tipo (Receita / Despesa) — ex.: *Moradia*, *Alimentação*, *Salário*.
+- **Contas (categorias)**: subdivisões de cada grupo — ex.: *Aluguel*, *Energia*, *Mercado*.
+- **Planejamento mensal**: defina o valor previsto de cada conta para cada mês.
+- **Lançamentos**: registre receitas e despesas reais com data, valor e descrição.
+- **Comparativo Real x Planejado**: visualização por grupo com barras de progresso e diferença.
+- **Dashboard**: resumo do mês com saldo, top despesas e progresso do plano.
+- **Navegação por mês**: troque o período no topo e todas as telas seguem o mesmo mês.
+
+---
+
+## Backend (CAP)
+
+### Pré-requisitos
+
+- Node.js 18+
+- (Opcional) `@sap/cds-dk` global: `npm i -g @sap/cds-dk`
+
+### Como rodar
+
 ```bash
+cd backend
 npm install
+npm run deploy   # cria db/financial.sqlite com dados de exemplo
+npm run watch    # inicia o serviço em http://localhost:4004
 ```
 
-### 2. Configurar variáveis de ambiente
-Copie o arquivo `.env.example` para `.env` e configure as variáveis.
+Após subir, abra `http://localhost:4004` para o catálogo do serviço.
 
-### 3. Iniciar MongoDB com Docker
+### Endpoints
+
+Base: `/financial`
+
+| Recurso                              | Descrição                                    |
+| ------------------------------------ | -------------------------------------------- |
+| `GET/POST/PATCH/DELETE GruposContas` | CRUD de grupos                               |
+| `GET/POST/PATCH/DELETE Contas`       | CRUD de contas                               |
+| `GET/POST/PATCH/DELETE Planejamentos`| CRUD de planos mensais                       |
+| `GET/POST/PATCH/DELETE Lancamentos`  | CRUD de lançamentos reais                    |
+| `GET comparativoMensal(ano,mes)`     | Comparativo por conta no mês                 |
+| `GET resumoMensal(ano,mes)`          | Totais consolidados do mês                   |
+| `POST upsertPlanejamento`            | Cria ou atualiza valor planejado de uma conta|
+
+### Modelo de dados
+
+Definido em [backend/db/schema.cds](backend/db/schema.cds):
+
+- **GruposContas** (nome, tipo: RECEITA/DESPESA, cor, ícone)
+- **Contas** (nome, grupo)
+- **Planejamentos** (conta, ano, mês, valorPlanejado)
+- **Lancamentos** (conta, data, descrição, valor, pago, formaPagamento)
+
+---
+
+## Frontend (React + Vite)
+
+### Pré-requisitos
+
+- Node.js 18+
+
+### Como rodar
+
 ```bash
-npm run docker:up
+cd frontend
+npm install
+npm run dev      # http://localhost:5173
 ```
 
-### 4. Executar o servidor
+O Vite faz proxy de `/financial` para `http://localhost:4004` (CAP). Suba o backend antes.
+
+### Build de produção
+
 ```bash
-# Desenvolvimento
-npm run dev
-
-# Produção
-npm start
+npm run build
+npm run preview
 ```
 
-## Endpoints da API
+### Telas
 
-### Conexões
-- `GET /api/connections` - Listar conexões
-- `POST /api/connections` - Criar conexão
-- `PUT /api/connections/:id` - Atualizar conexão
-- `DELETE /api/connections/:id` - Deletar conexão
-- `GET /api/connections/:id` - Buscar conexão por ID
-- `POST /api/connections/:id/test` - Testar conexão
+| Rota              | Tela                                             |
+| ----------------- | ------------------------------------------------ |
+| `/`               | Dashboard com resumo do mês e top despesas       |
+| `/planejamento`   | Planejar valores por conta no mês                |
+| `/lancamentos`    | Lançar receitas e despesas reais                 |
+| `/comparativo`    | Comparativo Real x Planejado por grupo           |
+| `/contas`         | Gerenciar grupos e contas                        |
 
-### Utilitários
-- `GET /api/health` - Health check
+---
 
-## Scripts disponíveis
+## Fluxo recomendado
 
-- `npm start` - Executar em produção
-- `npm run dev` - Executar em desenvolvimento
-- `npm run docker:up` - Subir containers Docker
-- `npm run docker:down` - Parar containers Docker
-- `npm run docker:logs` - Ver logs dos containers
+1. **Crie grupos e contas** em *Contas* (já vem com dados de exemplo).
+2. No início do mês, abra *Plano* e informe quanto planeja **receber** e **gastar** em cada conta.
+3. Durante o mês, registre os lançamentos reais em *Lançar*.
+4. Acompanhe em *Real x Plan.* o quanto está dentro/fora do orçamento.
+5. Use o seletor de mês no topo para navegar para meses anteriores ou planejar os próximos.
 
+---
 
-- npm install express mongodb cors axios xml2js dotenv
-- npm install -D nodemon
+## Estrutura
+
+```
+financial/
+├── backend/
+│   ├── db/
+│   │   ├── schema.cds              # modelo CDS
+│   │   └── data/                   # CSVs de exemplo
+│   ├── srv/
+│   │   ├── financial-service.cds   # service definition
+│   │   └── financial-service.js    # handlers (comparativo, resumo, upsert)
+│   └── package.json
+└── frontend/
+    ├── src/
+    │   ├── api.ts                  # client OData
+    │   ├── components/             # Layout, Modal, EmptyState
+    │   ├── context/                # Periodo, Toast
+    │   ├── pages/                  # Dashboard, Planejamento, Lançamentos, Comparativo, Contas
+    │   ├── styles/global.css       # tema mobile-first
+    │   ├── types.ts
+    │   ├── utils.ts
+    │   ├── App.tsx
+    │   └── main.tsx
+    ├── index.html
+    ├── tsconfig.json
+    ├── vite.config.ts              # proxy /financial -> :4004
+    └── package.json
+```

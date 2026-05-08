@@ -1,0 +1,21 @@
+name: service-financial-${CLIENT}
+services:
+  api:
+    build: .
+    working_dir: /home/node/app
+    env_file:
+      - .env
+    container_name: service-financial-${CLIENT}
+    environment:
+      - CDS_AUTH_KIND=mocked
+    ports:
+      - "${EXPOSE_PORT}:4004"
+    command: ["sh", "-c", "npx cds watch --profile $$CLIENT"]
+    restart: unless-stopped
+    networks:
+      - services-network
+
+networks:
+  services-network:
+    driver: bridge
+    external: true

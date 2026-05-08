@@ -1,46 +1,32 @@
 {
-  "name": "service-financial-manager",
+  "name": "financial-backend",
   "version": "1.0.0",
-  "description": "API de Gerenciamento Financeiro com MongoDB",
-  "main": "src/server.js",
-  "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "init-db": "node src/scripts/initDatabase.js",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
-  },
-  "keywords": [
-    "financial",
-    "management",
-    "mongodb",
-    "express",
-    "api",
-    "proventos",
-    "gastos",
-    "investimentos"
-  ],
-  "author": "",
-  "license": "MIT",
+  "description": "Backend CAP para gerenciador financeiro pessoal",
+  "private": true,
   "dependencies": {
-    "axios": "^1.11.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.6.1",
-    "express": "^4.21.2",
-    "mongodb": "^6.18.0",
-    "mongoose": "^8.0.0",
-    "xml2js": "^0.6.2"
+    "@sap/cds": "^9",
+    "express": "^4",
+    "@cap-js/postgres": "^2.3.0",
+    "@sap/xssec": "^4",
+    "cors": "^2.8.6"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.10"
+  "devDependencies": {},
+  "scripts": {
+    "start": "cds-serve",
+    "watch": "cds watch",
+    "deploy": "cds deploy --to postgres"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/CopacolDev/BERGAMO-service-financial-manager.git"
-  },
-  "bugs": {
-    "url": "https://github.com/CopacolDev/BERGAMO-service-financial-manager/issues"
-  },
-  "homepage": "https://github.com/CopacolDev/BERGAMO-service-financial-manager#readme"
+  "cds": {
+    "requires": {
+      "db": {
+        "kind": "postgres"
+      },
+      "auth": "dummy"
+    },
+    "[development]": {
+      "cors": {
+        "origin": "*"
+      }
+    }
+  }
 }

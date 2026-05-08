@@ -1,0 +1,31 @@
+name: action-deploy
+on:
+  push:
+    branches:
+      - dev
+      - qas
+
+
+jobs:
+  deploy:
+    if: github.ref_name == 'dev' || github.ref_name == 'qas' || github.ref_name == 'main'
+
+    runs-on: ubuntu-latest
+
+    environment: ${{ github.ref_name == 'dev' && 'DEV-SRV' || github.ref_name == 'qas' && 'QAS-SRV' || github.ref_name == 'main' && 'PRD-SRV' }}
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      # 🚀 Deploy principal (applications)
+      - name: Deploy aplicação
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          ARGS: "-rlgoDzvO --delete --exclude-from=.gitignore --exclude-from=.dockerignore"
+          SOURCE: "./"
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_PORT: ${{ secrets.REMOTE_PORT }}
+          TARGET: "/server_${{ vars.TARGET }}/services/financial"
