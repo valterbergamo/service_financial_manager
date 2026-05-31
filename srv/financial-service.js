@@ -126,6 +126,7 @@ module.exports = cds.service.impl(async function () {
             despesaPlanejada: 0, despesaRealizada: 0,
             reservaPlanejada: 0, reservaRealizada: 0,
             saldoPlanejado: 0, saldoRealizado: 0,
+            reservaAcumulada: 0,
         };
         if (!ano || !mes) return zero;
 
@@ -165,7 +166,12 @@ module.exports = cds.service.impl(async function () {
             else if (tipo === 'DESPESA') despesaRealizada += v;
         }
 
-        // Saldo operacional ignora reserva (não compõe receita-despesa).
+        // Saldos acumulados (conta corrente e poupança) até o fim do mês.
+        const { contaCorrente, poupanca } = await calcularSaldosAcumulados(this, ano, mes, contaTipo);
+
+        // Saldo livre da conta = receita − despesa − reserva.
+        // A reserva é uma saída da conta corrente para a poupança: não é gasto,
+        // mas reduz o dinheiro livre disponível (acumula em reservaAcumulada).
         return {
             ano, mes,
             receitaPlanejada,
@@ -174,9 +180,157 @@ module.exports = cds.service.impl(async function () {
             despesaRealizada,
             reservaPlanejada,
             reservaRealizada,
-            saldoPlanejado: receitaPlanejada - despesaPlanejada,
-            saldoRealizado: receitaRealizada - despesaRealizada,
+            saldoPlanejado: receitaPlanejada - despesaPlanejada - reservaPlanejada,
+            saldoRealizado: receitaRealizada - despesaRealizada - reservaRealizada,
+            reservaAcumulada: poupanca,
+            saldoContaCorrente: contaCorrente,
         };
+    });
+
+    /**
+     * Composição acumulada da poupança por conta de reserva (aportes do ano
+     * até o mês informado). Permite "abrir a poupança" e ver o que tem em cada
+     * reserva (emergência, viagem, etc.).
+     */
+    this.on('composicaoReservas', async (req) => {
+        const { ano, mes } = req.data;
+        if (!ano || !mes) return [];
+
+        const [contas, grupos] = await Promise.all([
+            SELECT.from(Contas).columns('ID', 'nome', 'grupo_ID'),
+            SELECT.from(GruposContas).columns('ID', 'tipo', 'cor'),
+        ]);
+        const grupoMap = new Map(grupos.map(g => [g.ID, g]));
+        const contaInfo = new Map(contas.map(c => [c.ID, c]));
+
+        const dataIniAno = `${ano}-01-01`;
+        const dataFim = mes === 12
+            ? `${ano + 1}-01-01`
+            : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+        const lancs = await SELECT.from(Lancamentos)
+            .columns('conta_ID', 'valor')
+            .where`data >= ${dataIniAno} and data < ${dataFim}`;
+
+        const porConta = new Map();
+        for (const l of lancs) {
+            const c = contaInfo.get(l.conta_ID);
+            const g = c ? grupoMap.get(c.grupo_ID) : null;
+            if (!g || g.tipo !== 'RESERVA') continue;
+            porConta.set(l.conta_ID, (porConta.get(l.conta_ID) || 0) + (Number(l.valor) || 0));
+        }
+
+        const linhas = [];
+        for (const [contaId, valor] of porConta) {
+            const c = contaInfo.get(contaId);
+            const g = grupoMap.get(c.grupo_ID) || {};
+            linhas.push({ conta_ID: contaId, nome: c.nome, cor: g.cor || '#0d9488', valor });
+        }
+        linhas.sort((a, b) => b.valor - a.valor);
+        return linhas;
+    });
+
+    /**
+     * Conferência de saldo: compara o saldo calculado (conta corrente ou
+     * poupança) com o valor real informado e, havendo divergência, lança um
+     * ajuste para igualar. Conta corrente → despesa/receita de ajuste;
+     * poupança → aporte/resgate de ajuste (reserva).
+     */
+    this.on('lancarAjusteSaldo', async (req) => {
+        const { ano, mes, alvo, valorReal, data } = req.data;
+        if (!ano || !mes || !alvo) {
+            req.error(400, 'ano, mes e alvo são obrigatórios.');
+            return;
+        }
+        if (alvo !== 'CONTA' && alvo !== 'POUPANCA') {
+            req.error(400, "alvo deve ser 'CONTA' ou 'POUPANCA'.");
+            return;
+        }
+
+        // Conferência é sobre o saldo DO MÊS (igual ao card do dashboard).
+        const mesVals = await calcularSaldoMes(this, ano, mes);
+        const atual = alvo === 'POUPANCA' ? mesVals.reserva : mesVals.saldo;
+        const diff = Math.round((Number(valorReal) - atual) * 100) / 100;
+
+        if (Math.abs(diff) < 0.005) {
+            return { ajustado: false, diferenca: 0, saldoAtual: atual, message: 'Sem divergência — nenhum ajuste necessário.' };
+        }
+
+        let tipo, valor, descricao;
+        if (alvo === 'POUPANCA') {
+            tipo = 'RESERVA';
+            valor = diff; // positivo = aporte; negativo = resgate
+            descricao = diff > 0 ? 'Ajuste de poupança (aporte)' : 'Ajuste de poupança (resgate)';
+        } else if (diff < 0) {
+            tipo = 'DESPESA';
+            valor = -diff;
+            descricao = 'Ajuste de saldo (saída)';
+        } else {
+            tipo = 'RECEITA';
+            valor = diff;
+            descricao = 'Ajuste de saldo (entrada)';
+        }
+
+        const contaId = await ensureContaAjuste(this, tipo);
+
+        // Data do ajuste: hoje se conferindo o mês corrente, senão último dia do mês.
+        let dataLanc = data;
+        if (!dataLanc) {
+            const hoje = new Date();
+            const ultimoDia = new Date(ano, mes, 0).getDate();
+            const dia = (hoje.getFullYear() === ano && hoje.getMonth() + 1 === mes)
+                ? hoje.getDate() : ultimoDia;
+            dataLanc = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+        }
+
+        await INSERT.into(Lancamentos).entries({
+            conta_ID: contaId, data: dataLanc, descricao,
+            valor, pago: true, recorrencias: 1,
+        });
+
+        return { ajustado: true, diferenca: diff, saldoAtual: atual, novoSaldo: Number(valorReal), message: descricao };
+    });
+
+    /**
+     * Define/acerta o saldo inicial (abertura do ano) para que o saldo
+     * acumulado calculado passe a bater com o valor real informado — sem criar
+     * lançamento. Ideal para configurar o saldo real da conta/poupança a 1ª vez.
+     */
+    this.on('ajustarSaldoInicial', async (req) => {
+        const { ano, mes, alvo, valorReal } = req.data;
+        if (!ano || !mes || !alvo) {
+            req.error(400, 'ano, mes e alvo são obrigatórios.');
+            return;
+        }
+        if (alvo !== 'CONTA' && alvo !== 'POUPANCA') {
+            req.error(400, "alvo deve ser 'CONTA' ou 'POUPANCA'.");
+            return;
+        }
+
+        const saldos = await calcularSaldosAcumulados(this, ano, mes);
+        const atual = alvo === 'POUPANCA' ? saldos.poupanca : saldos.contaCorrente;
+        const diff = Math.round((Number(valorReal) - atual) * 100) / 100;
+
+        if (Math.abs(diff) < 0.005) {
+            return { ajustado: false, diferenca: 0, saldoAtual: atual, message: 'Sem divergência — nenhum ajuste necessário.' };
+        }
+
+        const plano = await garantirPlanoDoAno(this, ano);
+        const antRec = Number(plano.saldoAnteriorReceitas) || 0;
+        const antRes = Number(plano.saldoAnteriorReservas) || 0;
+
+        // CONTA: aumenta a abertura de receitas (conta += diff).
+        // POUPANCA: aumenta abertura de reservas (poupança += diff) e também a de
+        // receitas (para a conta corrente NÃO mudar — dinheiro já estava guardado).
+        const patch = {};
+        if (alvo === 'POUPANCA') {
+            patch.saldoAnteriorReservas = antRes + diff;
+            patch.saldoAnteriorReceitas = antRec + diff;
+        } else {
+            patch.saldoAnteriorReceitas = antRec + diff;
+        }
+        await UPDATE(PlanosOrcamento).set(patch).where({ ID: plano.ID });
+
+        return { ajustado: true, diferenca: diff, saldoAtual: atual, novoSaldo: Number(valorReal), message: 'Saldo inicial ajustado.' };
     });
 
     /**
@@ -600,6 +754,121 @@ async function garantirPlanoDoAno(srv, ano) {
         plano = await SELECT.one.from(PlanosOrcamento).where({ ano });
     }
     return plano;
+}
+
+/**
+ * Calcula os saldos reais acumulados até o fim do mês informado:
+ *  - contaCorrente = (saldoAnterior receitas − despesas − reservas)
+ *                    + Σ(receita − despesa − reserva) realizadas no ano até o mês
+ *  - poupanca      = saldoAnteriorReservas + Σ(reserva) realizadas no ano até o mês
+ *
+ * `contaTipoOpt` (Map conta_ID → tipo) pode ser passado para evitar reconsulta.
+ */
+async function calcularSaldosAcumulados(srv, ano, mes, contaTipoOpt) {
+    const { Contas, GruposContas, Lancamentos, PlanosOrcamento } = srv.entities;
+
+    let contaTipo = contaTipoOpt;
+    if (!contaTipo) {
+        const [contas, grupos] = await Promise.all([
+            SELECT.from(Contas).columns('ID', 'grupo_ID'),
+            SELECT.from(GruposContas).columns('ID', 'tipo'),
+        ]);
+        const grupoTipo = new Map(grupos.map(g => [g.ID, g.tipo]));
+        contaTipo = new Map(contas.map(c => [c.ID, grupoTipo.get(c.grupo_ID)]));
+    }
+
+    const dataIniAno = `${ano}-01-01`;
+    const dataFim = mes === 12
+        ? `${ano + 1}-01-01`
+        : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+
+    const [plano, lancs] = await Promise.all([
+        SELECT.one.from(PlanosOrcamento)
+            .columns('saldoAnteriorReceitas', 'saldoAnteriorDespesas', 'saldoAnteriorReservas')
+            .where({ ano }),
+        SELECT.from(Lancamentos).columns('conta_ID', 'valor')
+            .where`data >= ${dataIniAno} and data < ${dataFim}`,
+    ]);
+
+    let r = 0, d = 0, res = 0;
+    for (const l of lancs) {
+        const t = contaTipo.get(l.conta_ID);
+        const v = Number(l.valor) || 0;
+        if (t === 'RECEITA') r += v;
+        else if (t === 'RESERVA') res += v;
+        else if (t === 'DESPESA') d += v;
+    }
+
+    const antRec = Number(plano?.saldoAnteriorReceitas) || 0;
+    const antDesp = Number(plano?.saldoAnteriorDespesas) || 0;
+    const antRes = Number(plano?.saldoAnteriorReservas) || 0;
+
+    const contaCorrente = Math.round(((antRec - antDesp - antRes) + (r - d - res)) * 100) / 100;
+    const poupanca = Math.round((antRes + res) * 100) / 100;
+    return { contaCorrente, poupanca };
+}
+
+/**
+ * Saldo realizado DO MÊS (não acumulado):
+ *  - saldo   = Σ(receita) − Σ(despesa) − Σ(reserva) lançadas no mês
+ *  - reserva = Σ(reserva) lançada no mês
+ */
+async function calcularSaldoMes(srv, ano, mes) {
+    const { Contas, GruposContas, Lancamentos } = srv.entities;
+    const [contas, grupos] = await Promise.all([
+        SELECT.from(Contas).columns('ID', 'grupo_ID'),
+        SELECT.from(GruposContas).columns('ID', 'tipo'),
+    ]);
+    const grupoTipo = new Map(grupos.map(g => [g.ID, g.tipo]));
+    const contaTipo = new Map(contas.map(c => [c.ID, grupoTipo.get(c.grupo_ID)]));
+
+    const dataIni = `${ano}-${String(mes).padStart(2, '0')}-01`;
+    const dataFim = mes === 12
+        ? `${ano + 1}-01-01`
+        : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+    const lancs = await SELECT.from(Lancamentos).columns('conta_ID', 'valor')
+        .where`data >= ${dataIni} and data < ${dataFim}`;
+
+    let r = 0, d = 0, res = 0;
+    for (const l of lancs) {
+        const t = contaTipo.get(l.conta_ID);
+        const v = Number(l.valor) || 0;
+        if (t === 'RECEITA') r += v;
+        else if (t === 'RESERVA') res += v;
+        else if (t === 'DESPESA') d += v;
+    }
+    return { saldo: Math.round((r - d - res) * 100) / 100, reserva: Math.round(res * 100) / 100 };
+}
+
+/**
+ * Garante a existência de um grupo "Ajustes" + conta de ajuste para o tipo
+ * informado (usado pela conferência de saldo). Retorna o ID da conta.
+ */
+async function ensureContaAjuste(srv, tipo) {
+    const { GruposContas, Contas } = srv.entities;
+
+    let grupo = await SELECT.one.from(GruposContas).where({ nome: 'Ajustes', tipo });
+    if (!grupo) {
+        await INSERT.into(GruposContas).entries({
+            nome: 'Ajustes', tipo, cor: '#64748b', icone: '⚖', ativo: true,
+            descricao: 'Lançamentos de ajuste gerados pela conferência de saldo.',
+        });
+        grupo = await SELECT.one.from(GruposContas).where({ nome: 'Ajustes', tipo });
+    }
+
+    const nomeConta = tipo === 'RESERVA' ? 'Ajuste de poupança'
+        : tipo === 'DESPESA' ? 'Ajuste de saldo (saída)'
+            : 'Ajuste de saldo (entrada)';
+
+    let conta = await SELECT.one.from(Contas).where({ nome: nomeConta, grupo_ID: grupo.ID });
+    if (!conta) {
+        await INSERT.into(Contas).entries({
+            nome: nomeConta, grupo_ID: grupo.ID, ativo: true,
+            descricao: 'Gerada automaticamente pela conferência de saldo.',
+        });
+        conta = await SELECT.one.from(Contas).where({ nome: nomeConta, grupo_ID: grupo.ID });
+    }
+    return conta.ID;
 }
 
 /**

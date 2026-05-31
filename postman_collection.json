@@ -1,0 +1,773 @@
+{
+  "info": {
+    "_postman_id": "f1n4nc14l-mngr-0001",
+    "name": "Financial Manager - Backend",
+    "description": "Collection do serviço CAP Financial (OData v4). Base path: /financial. Configure a variável `baseUrl` no environment ou diretamente na collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://valterbergamo.com.br/api/fin/dev/odata/v4/financial",
+      "type": "string"
+    },
+    {
+      "key": "grupoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "contaId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "planejamentoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lancamentoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "formaPagamentoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ano",
+      "value": "2026",
+      "type": "string"
+    },
+    {
+      "key": "mes",
+      "value": "5",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Service Metadata",
+      "item": [
+        {
+          "name": "Service Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          }
+        },
+        {
+          "name": "Metadata ($metadata)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/$metadata",
+              "host": ["{{baseUrl}}"],
+              "path": ["$metadata"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Grupos de Contas",
+      "item": [
+        {
+          "name": "Listar grupos (ordenado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/GruposContas?$orderby=tipo,nome",
+              "host": ["{{baseUrl}}"],
+              "path": ["GruposContas"],
+              "query": [
+                { "key": "$orderby", "value": "tipo,nome" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar grupo por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/GruposContas({{grupoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["GruposContas({{grupoId}})"]
+            }
+          }
+        },
+        {
+          "name": "Criar grupo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  if (data && data.ID) pm.collectionVariables.set('grupoId', data.ID);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Moradia\",\n  \"tipo\": \"DESPESA\",\n  \"descricao\": \"Gastos com casa\",\n  \"icone\": \"home\",\n  \"cor\": \"#3b82f6\",\n  \"ativo\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/GruposContas",
+              "host": ["{{baseUrl}}"],
+              "path": ["GruposContas"]
+            }
+          }
+        },
+        {
+          "name": "Atualizar grupo (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Moradia (atualizado)\",\n  \"cor\": \"#10b981\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/GruposContas({{grupoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["GruposContas({{grupoId}})"]
+            }
+          }
+        },
+        {
+          "name": "Deletar grupo",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/GruposContas({{grupoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["GruposContas({{grupoId}})"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contas",
+      "item": [
+        {
+          "name": "Listar contas (com grupo)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Contas?$orderby=nome&$expand=grupo",
+              "host": ["{{baseUrl}}"],
+              "path": ["Contas"],
+              "query": [
+                { "key": "$orderby", "value": "nome" },
+                { "key": "$expand", "value": "grupo" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar conta por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Contas({{contaId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["Contas({{contaId}})"]
+            }
+          }
+        },
+        {
+          "name": "Criar conta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  if (data && data.ID) pm.collectionVariables.set('contaId', data.ID);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grupo_ID\": \"{{grupoId}}\",\n  \"nome\": \"Aluguel\",\n  \"descricao\": \"Aluguel mensal\",\n  \"formula\": null,\n  \"ativo\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/Contas",
+              "host": ["{{baseUrl}}"],
+              "path": ["Contas"]
+            }
+          }
+        },
+        {
+          "name": "Atualizar conta (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Aluguel (atualizado)\",\n  \"formula\": \"30% * %RECEITA\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/Contas({{contaId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["Contas({{contaId}})"]
+            }
+          }
+        },
+        {
+          "name": "Deletar conta",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Contas({{contaId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["Contas({{contaId}})"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Planejamentos",
+      "item": [
+        {
+          "name": "Listar planejamentos (ano/mes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Planejamentos?$filter=ano eq {{ano}} and mes eq {{mes}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["Planejamentos"],
+              "query": [
+                { "key": "$filter", "value": "ano eq {{ano}} and mes eq {{mes}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "upsertPlanejamento (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conta\": \"{{contaId}}\",\n  \"ano\": {{ano}},\n  \"mes\": {{mes}},\n  \"valor\": 1500.00,\n  \"observacao\": \"Reajuste anual\",\n  \"motivo\": \"Ajuste manual\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upsertPlanejamento",
+              "host": ["{{baseUrl}}"],
+              "path": ["upsertPlanejamento"]
+            }
+          }
+        },
+        {
+          "name": "Deletar planejamento",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Planejamentos({{planejamentoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["Planejamentos({{planejamentoId}})"]
+            }
+          }
+        },
+        {
+          "name": "planejamentoAnual (function)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/planejamentoAnual(ano={{ano}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["planejamentoAnual(ano={{ano}})"]
+            }
+          }
+        },
+        {
+          "name": "upsertPlanejamentoAnual (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}},\n  \"celulas\": [\n    { \"conta_ID\": \"{{contaId}}\", \"mes\": 1, \"valor\": 1000.00 },\n    { \"conta_ID\": \"{{contaId}}\", \"mes\": 2, \"valor\": 1100.00 }\n  ],\n  \"motivo\": \"Atualização em lote\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upsertPlanejamentoAnual",
+              "host": ["{{baseUrl}}"],
+              "path": ["upsertPlanejamentoAnual"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Revisões",
+      "item": [
+        {
+          "name": "Listar revisões (conta/ano/mes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/RevisoesPlanejamento?$filter=conta_ID eq {{contaId}} and ano eq {{ano}} and mes eq {{mes}}&$orderby=createdAt desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["RevisoesPlanejamento"],
+              "query": [
+                { "key": "$filter", "value": "conta_ID eq {{contaId}} and ano eq {{ano}} and mes eq {{mes}}" },
+                { "key": "$orderby", "value": "createdAt desc" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fórmulas / Recálculo",
+      "item": [
+        {
+          "name": "recalcularPlanejamento (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}},\n  \"mes\": {{mes}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recalcularPlanejamento",
+              "host": ["{{baseUrl}}"],
+              "path": ["recalcularPlanejamento"]
+            }
+          }
+        },
+        {
+          "name": "recalcularPlanejamentoAnual (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recalcularPlanejamentoAnual",
+              "host": ["{{baseUrl}}"],
+              "path": ["recalcularPlanejamentoAnual"]
+            }
+          }
+        },
+        {
+          "name": "validarFormula (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"formula\": \"10% * %RECEITA\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/validarFormula",
+              "host": ["{{baseUrl}}"],
+              "path": ["validarFormula"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Plano de Orçamento",
+      "item": [
+        {
+          "name": "Listar planos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/PlanosOrcamento?$orderby=ano desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["PlanosOrcamento"],
+              "query": [
+                { "key": "$orderby", "value": "ano desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "garantirPlano (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/garantirPlano",
+              "host": ["{{baseUrl}}"],
+              "path": ["garantirPlano"]
+            }
+          }
+        },
+        {
+          "name": "renomearPlano (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}},\n  \"nome\": \"Plano 2026\",\n  \"descricao\": \"Plano anual de orçamento\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/renomearPlano",
+              "host": ["{{baseUrl}}"],
+              "path": ["renomearPlano"]
+            }
+          }
+        },
+        {
+          "name": "editarPlano (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}},\n  \"nome\": \"Plano 2026\",\n  \"descricao\": \"Plano de orçamento anual\",\n  \"saldoAnteriorReceitas\": 0,\n  \"saldoAnteriorDespesas\": 0,\n  \"saldoAnteriorReservas\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/editarPlano",
+              "host": ["{{baseUrl}}"],
+              "path": ["editarPlano"]
+            }
+          }
+        },
+        {
+          "name": "publicarPlano (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/publicarPlano",
+              "host": ["{{baseUrl}}"],
+              "path": ["publicarPlano"]
+            }
+          }
+        },
+        {
+          "name": "voltarRascunho (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/voltarRascunho",
+              "host": ["{{baseUrl}}"],
+              "path": ["voltarRascunho"]
+            }
+          }
+        },
+        {
+          "name": "limparPlano (action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ano\": {{ano}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/limparPlano",
+              "host": ["{{baseUrl}}"],
+              "path": ["limparPlano"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Snapshot Planejamentos",
+      "item": [
+        {
+          "name": "Listar snapshot do ano",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/PlanejamentosSnapshot?$filter=ano eq {{ano}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["PlanejamentosSnapshot"],
+              "query": [
+                { "key": "$filter", "value": "ano eq {{ano}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Formas de Pagamento",
+      "item": [
+        {
+          "name": "Listar formas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/FormasPagamento?$orderby=nome",
+              "host": ["{{baseUrl}}"],
+              "path": ["FormasPagamento"],
+              "query": [
+                { "key": "$orderby", "value": "nome" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar forma de pagamento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  if (data && data.ID) pm.collectionVariables.set('formaPagamentoId', data.ID);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Cartão Nubank\",\n  \"tipo\": \"CREDITO\",\n  \"banco\": \"Nubank\",\n  \"descricao\": \"Cartão principal\",\n  \"cor\": \"#8a05be\",\n  \"ativo\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/FormasPagamento",
+              "host": ["{{baseUrl}}"],
+              "path": ["FormasPagamento"]
+            }
+          }
+        },
+        {
+          "name": "Atualizar forma (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Cartão Nubank (atualizado)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/FormasPagamento({{formaPagamentoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["FormasPagamento({{formaPagamentoId}})"]
+            }
+          }
+        },
+        {
+          "name": "Deletar forma",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/FormasPagamento({{formaPagamentoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["FormasPagamento({{formaPagamentoId}})"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lançamentos",
+      "item": [
+        {
+          "name": "Listar lançamentos do mês (com pagamento)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Lancamentos?$filter=data ge 2026-05-01 and data lt 2026-06-01&$orderby=data desc&$expand=pagamento",
+              "host": ["{{baseUrl}}"],
+              "path": ["Lancamentos"],
+              "query": [
+                { "key": "$filter", "value": "data ge 2026-05-01 and data lt 2026-06-01" },
+                { "key": "$orderby", "value": "data desc" },
+                { "key": "$expand", "value": "pagamento" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar lançamento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  if (data && data.ID) pm.collectionVariables.set('lancamentoId', data.ID);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conta_ID\": \"{{contaId}}\",\n  \"data\": \"2026-05-15\",\n  \"descricao\": \"Aluguel maio\",\n  \"valor\": 1500.00,\n  \"pago\": true,\n  \"pagamento_ID\": \"{{formaPagamentoId}}\",\n  \"recorrencias\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/Lancamentos",
+              "host": ["{{baseUrl}}"],
+              "path": ["Lancamentos"]
+            }
+          }
+        },
+        {
+          "name": "Atualizar lançamento (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"valor\": 1550.00,\n  \"descricao\": \"Aluguel maio (corrigido)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/Lancamentos({{lancamentoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["Lancamentos({{lancamentoId}})"]
+            }
+          }
+        },
+        {
+          "name": "Deletar lançamento",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Lancamentos({{lancamentoId}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["Lancamentos({{lancamentoId}})"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Comparativo / Resumo",
+      "item": [
+        {
+          "name": "comparativoMensal (function)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/comparativoMensal(ano={{ano}},mes={{mes}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["comparativoMensal(ano={{ano}},mes={{mes}})"]
+            }
+          }
+        },
+        {
+          "name": "resumoMensal (function)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/resumoMensal(ano={{ano}},mes={{mes}})",
+              "host": ["{{baseUrl}}"],
+              "path": ["resumoMensal(ano={{ano}},mes={{mes}})"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

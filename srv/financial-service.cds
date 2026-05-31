@@ -44,6 +44,29 @@ service FinancialService {
         reservaRealizada    : Decimal(15,2);
         saldoPlanejado      : Decimal(15,2);
         saldoRealizado      : Decimal(15,2);
+        reservaAcumulada    : Decimal(15,2);
+        saldoContaCorrente  : Decimal(15,2);
+    }
+
+    /**
+     * Composição da poupança: aportes acumulados de reserva por conta no ano.
+     */
+    type ComposicaoReserva {
+        conta_ID : UUID;
+        nome     : String;
+        cor      : String;
+        valor    : Decimal(15,2);
+    }
+
+    /**
+     * Resultado da conferência de saldo.
+     */
+    type AjusteSaldoResultado {
+        ajustado   : Boolean;
+        diferenca  : Decimal(15,2);
+        saldoAtual : Decimal(15,2);
+        novoSaldo  : Decimal(15,2);
+        message    : String;
     }
 
     /**
@@ -81,6 +104,36 @@ service FinancialService {
      * Resumo total (receitas, despesas, saldos) do mês.
      */
     function resumoMensal(ano : Integer, mes : Integer) returns ResumoMensal;
+
+    /**
+     * Composição acumulada da poupança por conta de reserva (ano até o mês).
+     */
+    function composicaoReservas(ano : Integer, mes : Integer) returns array of ComposicaoReserva;
+
+    /**
+     * Confere o saldo (conta corrente ou poupança) contra o valor real e,
+     * havendo divergência, lança um ajuste para igualar.
+     *  - alvo: 'CONTA' (conta corrente) ou 'POUPANCA'
+     *  - valorReal: saldo real informado pelo usuário
+     */
+    action lancarAjusteSaldo(
+        ano       : Integer,
+        mes       : Integer,
+        alvo      : String,
+        valorReal : Decimal(15,2),
+        data      : Date,
+    ) returns AjusteSaldoResultado;
+
+    /**
+     * Acerta o saldo inicial (abertura do ano) para o saldo acumulado bater
+     * com o valor real informado, sem criar lançamento.
+     */
+    action ajustarSaldoInicial(
+        ano       : Integer,
+        mes       : Integer,
+        alvo      : String,
+        valorReal : Decimal(15,2),
+    ) returns AjusteSaldoResultado;
 
     /**
      * Grade de planejamento do ano todo: 12 valores por conta.

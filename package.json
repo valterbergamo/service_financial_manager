@@ -1,7 +1,7 @@
 {
   "name": "financial-backend",
   "version": "1.0.0",
-  "description": "Backend CAP para gerenciador financeiro pessoal",
+  "description": "Backend CAP para gerenciador Planejamento financeiro",
   "private": true,
   "dependencies": {
     "@sap/cds": "^9",

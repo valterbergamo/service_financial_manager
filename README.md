@@ -1,6 +1,6 @@
-# Financeiro Pessoal
+# Planejamento financeiro
 
-Gerenciador financeiro pessoal completo: planejamento mensal de entradas e saídas, lançamento de receitas e despesas reais, e comparativo **planejado x realizado** mês a mês.
+Gerenciador Planejamento financeiro completo: planejamento mensal de entradas e saídas, lançamento de receitas e despesas reais, e comparativo **planejado x realizado** mês a mês.
 
 Repositório separado em dois projetos:
 
