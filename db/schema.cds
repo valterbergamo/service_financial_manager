@@ -147,6 +147,12 @@ entity Lancamentos : cuid, managed {
     pago           : Boolean default true;
     pagamento      : Association to FormasPagamento;
     recorrencias   : Integer default 1; // total de parcelas (1 = sem recorrência)
+    /**
+     * De onde veio o lançamento quando não foi digitado na tela.
+     * Ex.: "Afonso | lote 20261106-0830-ab12 | extrato fatura-itau.pdf | 06/11/2026 08:30"
+     * (o Afonso só apaga o que tem origem dele; dá para filtrar e desfazer o lote).
+     */
+    origem         : String(255);
 }
 
 /**

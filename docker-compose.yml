@@ -18,7 +18,10 @@ services:
     restart: unless-stopped
     networks:
       - pg-network
+      - financas # o chat do Afonso (applications-claude) chama http://financial-api:4004 por aqui, sem porta nova
 
 networks:
   pg-network:
     external: true
+  financas:
+    name: financas-net # criada aqui; o applications entra nela como external
