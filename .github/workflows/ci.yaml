@@ -1,33 +1,36 @@
-name: action-deploy
+name: deploy
+
+# main -> /server/prd/services/service_financial_manager (API do https://valterbergamo.com.br/apps/financas/)
 on:
   push:
     branches:
-      - dev
-      - qas
       - main
-      
+  workflow_dispatch:
 
+concurrency:
+  group: deploy-service-financial
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    if: github.ref_name == 'dev' || github.ref_name == 'qas' || github.ref_name == 'main'
-
     runs-on: ubuntu-latest
-
-    environment: ${{ github.ref_name == 'dev' && 'DEV-SRV' || github.ref_name == 'qas' && 'QAS-SRV' || github.ref_name == 'main' && 'PRD-SRV' }}
-
+    timeout-minutes: 20
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
 
-      # 🚀 Deploy principal (applications)
-      - name: Deploy aplicação
-        uses: easingthemes/ssh-deploy@main
+      - name: Deploy na VPS
+        uses: easingthemes/ssh-deploy@v5.1.0
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
-          ARGS: "-rlgoDzvO --delete --exclude-from=.gitignore --exclude-from=.dockerignore"
-          SOURCE: "./"
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_PORT: ${{ secrets.REMOTE_PORT }}
-          TARGET: "/server_${{ vars.TARGET }}/services/financial"
+          ARGS: "-rlgoDzvO --delete --exclude-from=.gitignore --exclude-from=.dockerignore"
+          SOURCE: "./"
+          TARGET: "/server/prd/services/service_financial_manager"
+          SCRIPT_AFTER_REQUIRED: true
+          SCRIPT_AFTER: |
+            cd /server/prd/services/service_financial_manager
+            docker compose up -d --build --remove-orphans
+            docker compose ps --format '{{.Name}}\t{{.Status}}'

@@ -1,21 +1,24 @@
-name: service-financial-${CLIENT}
+# API do gerenciador financeiro (SAP CAP), só produção.
+# Na web: https://valterbergamo.com.br/apps/financas/api/ (o nginx protege com o login do portal).
+# Banco: postgres_prd, base "financial". A senha fica no .env do servidor (CDS_REQUIRES_DB_CREDENTIALS_PASSWORD).
+name: service_financial_manager
 services:
   api:
     build: .
-    working_dir: /home/node/app
+    container_name: financial-api
     env_file:
       - .env
-    container_name: service-financial-${CLIENT}
     environment:
-      - CDS_AUTH_KIND=mocked
+      - NODE_ENV=production
+      - CDS_REQUIRES_DB_CREDENTIALS_HOST=postgres_prd
+      - CDS_REQUIRES_DB_CREDENTIALS_PORT=5432
+      - CDS_REQUIRES_DB_CREDENTIALS_DATABASE=financial
     ports:
-      - "${EXPOSE_PORT}:4004"
-    command: ["sh", "-c", "npx cds watch --profile $$CLIENT"]
+      - "127.0.0.1:6070:4004"
     restart: unless-stopped
     networks:
-      - services-network
+      - pg-network
 
 networks:
-  services-network:
-    driver: bridge
+  pg-network:
     external: true
