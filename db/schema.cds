@@ -117,6 +117,7 @@ type TipoFormaPagamento : String enum {
     DINHEIRO;
     BOLETO;
     TRANSFERENCIA;
+    VALE;
     OUTRO;
 }
 

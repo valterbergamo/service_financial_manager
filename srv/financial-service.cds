@@ -46,6 +46,7 @@ service FinancialService {
         saldoRealizado      : Decimal(15,2);
         reservaAcumulada    : Decimal(15,2);
         saldoContaCorrente  : Decimal(15,2);
+        saldoVale           : Decimal(15,2);
     }
 
     /**

@@ -167,7 +167,7 @@ module.exports = cds.service.impl(async function () {
         }
 
         // Saldos acumulados (conta corrente e poupança) até o fim do mês.
-        const { contaCorrente, poupanca } = await calcularSaldosAcumulados(this, ano, mes, contaTipo);
+        const { contaCorrente, poupanca, vale } = await calcularSaldosAcumulados(this, ano, mes, contaTipo);
 
         // Saldo livre da conta = receita − despesa − reserva.
         // A reserva é uma saída da conta corrente para a poupança: não é gasto,
@@ -184,6 +184,7 @@ module.exports = cds.service.impl(async function () {
             saldoRealizado: receitaRealizada - despesaRealizada - reservaRealizada,
             reservaAcumulada: poupanca,
             saldoContaCorrente: contaCorrente,
+            saldoVale: vale,
         };
     });
 
@@ -246,9 +247,14 @@ module.exports = cds.service.impl(async function () {
             return;
         }
 
-        // Conferência é sobre o saldo DO MÊS (igual ao card do dashboard).
-        const mesVals = await calcularSaldoMes(this, ano, mes);
-        const atual = alvo === 'POUPANCA' ? mesVals.reserva : mesVals.saldo;
+        // CONTA confere o saldo acumulado da conta corrente (o do banco, sem o vale);
+        // POUPANCA confere a reserva do mês.
+        let atual;
+        if (alvo === 'POUPANCA') {
+            atual = (await calcularSaldoMes(this, ano, mes)).reserva;
+        } else {
+            atual = (await calcularSaldosAcumulados(this, ano, mes)).contaCorrente;
+        }
         const diff = Math.round((Number(valorReal) - atual) * 100) / 100;
 
         if (Math.abs(diff) < 0.005) {
@@ -765,7 +771,7 @@ async function garantirPlanoDoAno(srv, ano) {
  * `contaTipoOpt` (Map conta_ID → tipo) pode ser passado para evitar reconsulta.
  */
 async function calcularSaldosAcumulados(srv, ano, mes, contaTipoOpt) {
-    const { Contas, GruposContas, Lancamentos, PlanosOrcamento } = srv.entities;
+    const { Contas, GruposContas, Lancamentos, PlanosOrcamento, FormasPagamento } = srv.entities;
 
     let contaTipo = contaTipoOpt;
     if (!contaTipo) {
@@ -782,18 +788,27 @@ async function calcularSaldosAcumulados(srv, ano, mes, contaTipoOpt) {
         ? `${ano + 1}-01-01`
         : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
 
-    const [plano, lancs] = await Promise.all([
+    const [plano, lancs, formasVale] = await Promise.all([
         SELECT.one.from(PlanosOrcamento)
             .columns('saldoAnteriorReceitas', 'saldoAnteriorDespesas', 'saldoAnteriorReservas')
             .where({ ano }),
-        SELECT.from(Lancamentos).columns('conta_ID', 'valor')
+        SELECT.from(Lancamentos).columns('conta_ID', 'valor', 'pagamento_ID')
             .where`data >= ${dataIniAno} and data < ${dataFim}`,
+        SELECT.from(FormasPagamento).columns('ID').where({ tipo: 'VALE' }),
     ]);
 
-    let r = 0, d = 0, res = 0;
+    // O que entra ou sai pelo vale (forma de pagamento tipo VALE) não passa pela
+    // conta corrente: fica num saldo à parte.
+    const idsVale = new Set(formasVale.map(f => f.ID));
+    let r = 0, d = 0, res = 0, vale = 0;
     for (const l of lancs) {
         const t = contaTipo.get(l.conta_ID);
         const v = Number(l.valor) || 0;
+        if (idsVale.has(l.pagamento_ID)) {
+            if (t === 'RECEITA') vale += v;
+            else if (t === 'DESPESA') vale -= v;
+            continue;
+        }
         if (t === 'RECEITA') r += v;
         else if (t === 'RESERVA') res += v;
         else if (t === 'DESPESA') d += v;
@@ -805,7 +820,7 @@ async function calcularSaldosAcumulados(srv, ano, mes, contaTipoOpt) {
 
     const contaCorrente = Math.round(((antRec - antDesp - antRes) + (r - d - res)) * 100) / 100;
     const poupanca = Math.round((antRes + res) * 100) / 100;
-    return { contaCorrente, poupanca };
+    return { contaCorrente, poupanca, vale: Math.round(vale * 100) / 100 };
 }
 
 /**
