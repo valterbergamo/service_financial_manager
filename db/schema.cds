@@ -154,6 +154,51 @@ entity Lancamentos : cuid, managed {
      * (o Afonso só apaga o que tem origem dele; dá para filtrar e desfazer o lote).
      */
     origem         : String(255);
+    /**
+     * Conta bancária (onde o dinheiro está): de onde saiu (despesa/reserva)
+     * ou onde entrou (receita). Vazio = conta padrão (a primeira corrente).
+     */
+    contaBancaria  : Association to ContasBancarias;
+}
+
+/**
+ * Tipos de conta bancária.
+ * - CORRENTE: banco, entra no total do "Saldo na conta".
+ * - DINHEIRO: dinheiro em mãos, entra no total.
+ * - VALE: vale-alimentação/refeição; saldo à parte ("no vale"), fora do total.
+ */
+type TipoContaBancaria : String enum {
+    CORRENTE;
+    DINHEIRO;
+    VALE;
+}
+
+/**
+ * Onde o dinheiro está (Banco do Brasil, Bradesco, Visa Vale, Dinheiro).
+ * Saldo = saldoInicial (na dataReferencia) + lançamentos e transferências
+ * desde essa data.
+ */
+entity ContasBancarias : cuid, managed {
+    nome           : String(60) not null;
+    tipo           : TipoContaBancaria default 'CORRENTE';
+    saldoInicial   : Decimal(15,2) default 0;
+    dataReferencia : Date;
+    cor            : String(20);
+    ordem          : Integer default 0;
+    ativo          : Boolean default true;
+}
+
+/**
+ * Transferência entre contas bancárias: só move saldo, não é receita
+ * nem despesa (não aparece em Contas/Grupos nem no planejamento).
+ */
+entity Transferencias : cuid, managed {
+    data          : Date not null;
+    valor         : Decimal(15,2) not null;
+    descricao     : String(255);
+    contaOrigem   : Association to ContasBancarias not null;
+    contaDestino  : Association to ContasBancarias not null;
+    origem        : String(255); // marca do Afonso, como em Lancamentos
 }
 
 /**

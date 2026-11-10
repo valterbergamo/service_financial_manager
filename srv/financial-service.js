@@ -4,8 +4,36 @@ module.exports = cds.service.impl(async function () {
 
     const {
         GruposContas, Contas, Planejamentos, Lancamentos, RevisoesPlanejamento,
-        PlanosOrcamento, PlanejamentosSnapshot,
+        PlanosOrcamento, PlanejamentosSnapshot, ContasBancarias, Transferencias, FormasPagamento,
     } = this.entities;
+
+    /**
+     * Lançamento novo sem conta bancária: forma de pagamento tipo VALE vai para
+     * o Visa Vale (conta tipo VALE); o resto, para a conta padrão (1ª corrente).
+     */
+    this.before('CREATE', Lancamentos, async (req) => {
+        if (req.data.contaBancaria_ID) return;
+        const contas = await SELECT.from(ContasBancarias).where({ ativo: true }).orderBy('ordem', 'nome');
+        if (!contas.length) return;
+        let alvo;
+        if (req.data.pagamento_ID) {
+            const f = await SELECT.one.from(FormasPagamento).columns('tipo').where({ ID: req.data.pagamento_ID });
+            if (f?.tipo === 'VALE') alvo = contas.find(c => c.tipo === 'VALE');
+        }
+        alvo = alvo || contas.find(c => c.tipo === 'CORRENTE') || contas[0];
+        req.data.contaBancaria_ID = alvo.ID;
+    });
+
+    /**
+     * Transferência: valor positivo e contas diferentes.
+     */
+    this.before(['CREATE', 'UPDATE'], Transferencias, async (req) => {
+        const d = req.data;
+        if (d.valor !== undefined && !(Number(d.valor) > 0)) return req.error(400, 'O valor da transferência precisa ser positivo.');
+        if (d.contaOrigem_ID && d.contaDestino_ID && d.contaOrigem_ID === d.contaDestino_ID) {
+            return req.error(400, 'Origem e destino precisam ser contas diferentes.');
+        }
+    });
 
     /**
      * Após criar um lançamento com recorrencias > 1, soma o valor da parcela
@@ -167,7 +195,15 @@ module.exports = cds.service.impl(async function () {
         }
 
         // Saldos acumulados (conta corrente e poupança) até o fim do mês.
-        const { contaCorrente, poupanca, vale } = await calcularSaldosAcumulados(this, ano, mes, contaTipo);
+        const acum = await calcularSaldosAcumulados(this, ano, mes, contaTipo);
+        const poupanca = acum.poupanca;
+        // Conta corrente = total das contas bancárias (menos o vale), vale = contas tipo VALE.
+        // Sem contas bancárias cadastradas, cai no cálculo antigo.
+        const bancos = await calcularSaldosBancarios(this, ano, mes);
+        const contaCorrente = bancos.length
+            ? round2(bancos.filter(b => b.tipo !== 'VALE').reduce((t, b) => t + b.saldo, 0)) : acum.contaCorrente;
+        const vale = bancos.length
+            ? round2(bancos.filter(b => b.tipo === 'VALE').reduce((t, b) => t + b.saldo, 0)) : acum.vale;
 
         // Saldo livre da conta = receita − despesa − reserva.
         // A reserva é uma saída da conta corrente para a poupança: não é gasto,
@@ -186,6 +222,15 @@ module.exports = cds.service.impl(async function () {
             saldoContaCorrente: contaCorrente,
             saldoVale: vale,
         };
+    });
+
+    /**
+     * Saldo de cada conta bancária no fim do mês, com o movimento do mês.
+     */
+    this.on('saldosBancarios', async (req) => {
+        const { ano, mes } = req.data;
+        if (!ano || !mes) return [];
+        return calcularSaldosBancarios(this, ano, mes);
     });
 
     /**
@@ -821,6 +866,62 @@ async function calcularSaldosAcumulados(srv, ano, mes, contaTipoOpt) {
     const contaCorrente = Math.round(((antRec - antDesp - antRes) + (r - d - res)) * 100) / 100;
     const poupanca = Math.round((antRes + res) * 100) / 100;
     return { contaCorrente, poupanca, vale: Math.round(vale * 100) / 100 };
+}
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * Saldo de cada conta bancária ativa no fim do mês:
+ *  saldoInicial + Σ(receita − despesa − reserva) dos lançamentos da conta
+ *  + transferências recebidas − enviadas, tudo desde a dataReferencia da conta.
+ * Lançamento sem conta bancária conta na conta padrão (1ª corrente).
+ * Devolve também o movimento do mês (entradas, saídas, transferências).
+ */
+async function calcularSaldosBancarios(srv, ano, mes) {
+    const { Contas, GruposContas, Lancamentos, ContasBancarias, Transferencias } = srv.entities;
+    const dataIni = `${ano}-${String(mes).padStart(2, '0')}-01`;
+    const dataFim = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+
+    const [bancos, contas, grupos, lancs, transf] = await Promise.all([
+        SELECT.from(ContasBancarias).where({ ativo: true }).orderBy('ordem', 'nome'),
+        SELECT.from(Contas).columns('ID', 'grupo_ID'),
+        SELECT.from(GruposContas).columns('ID', 'tipo'),
+        SELECT.from(Lancamentos).columns('conta_ID', 'valor', 'data', 'contaBancaria_ID').where`data < ${dataFim}`,
+        SELECT.from(Transferencias).columns('valor', 'data', 'contaOrigem_ID', 'contaDestino_ID').where`data < ${dataFim}`,
+    ]);
+    if (!bancos.length) return [];
+
+    const grupoTipo = new Map(grupos.map(g => [g.ID, g.tipo]));
+    const contaTipo = new Map(contas.map(c => [c.ID, grupoTipo.get(c.grupo_ID)]));
+    const padrao = (bancos.find(b => b.tipo === 'CORRENTE') || bancos[0]).ID;
+    const acc = new Map(bancos.map(b => [b.ID, {
+        ID: b.ID, nome: b.nome, tipo: b.tipo, cor: b.cor,
+        ref: b.dataReferencia || '0000-01-01',
+        saldo: Number(b.saldoInicial) || 0,
+        entradas: 0, saidas: 0, transferenciasIn: 0, transferenciasOut: 0,
+    }]));
+
+    for (const l of lancs) {
+        const a = acc.get(l.contaBancaria_ID) || acc.get(padrao);
+        if (String(l.data) < a.ref) continue;
+        const t = contaTipo.get(l.conta_ID);
+        const v = Number(l.valor) || 0;
+        const sinal = t === 'RECEITA' ? 1 : (t === 'DESPESA' || t === 'RESERVA') ? -1 : 0;
+        a.saldo += sinal * v;
+        if (String(l.data) >= dataIni) { if (sinal > 0) a.entradas += v; else if (sinal < 0) a.saidas += v; }
+    }
+    for (const x of transf) {
+        const v = Number(x.valor) || 0;
+        const noMes = String(x.data) >= dataIni;
+        const o = acc.get(x.contaOrigem_ID);
+        const d = acc.get(x.contaDestino_ID);
+        if (o && String(x.data) >= o.ref) { o.saldo -= v; if (noMes) o.transferenciasOut += v; }
+        if (d && String(x.data) >= d.ref) { d.saldo += v; if (noMes) d.transferenciasIn += v; }
+    }
+    return [...acc.values()].map(({ ref, ...a }) => ({
+        ...a, saldo: round2(a.saldo), entradas: round2(a.entradas), saidas: round2(a.saidas),
+        transferenciasIn: round2(a.transferenciasIn), transferenciasOut: round2(a.transferenciasOut),
+    }));
 }
 
 /**

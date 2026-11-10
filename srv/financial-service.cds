@@ -11,6 +11,28 @@ service FinancialService {
     entity PlanosOrcamento        as projection on fin.PlanosOrcamento;
     entity PlanejamentosSnapshot  as projection on fin.PlanejamentosSnapshot;
     entity FormasPagamento        as projection on fin.FormasPagamento;
+    entity ContasBancarias        as projection on fin.ContasBancarias;
+    entity Transferencias         as projection on fin.Transferencias;
+
+    /**
+     * Saldo de uma conta bancária no fim do mês, com o movimento do mês.
+     */
+    type SaldoContaBancaria {
+        ID                : UUID;
+        nome              : String;
+        tipo              : String;
+        cor               : String;
+        saldo             : Decimal(15,2);
+        entradas          : Decimal(15,2);  // receitas do mês
+        saidas            : Decimal(15,2);  // despesas e reservas do mês
+        transferenciasIn  : Decimal(15,2);
+        transferenciasOut : Decimal(15,2);
+    }
+
+    /**
+     * Saldo por conta bancária no fim do mês (todas as ativas, vale incluso).
+     */
+    function saldosBancarios(ano : Integer, mes : Integer) returns array of SaldoContaBancaria;
 
     /**
      * Linha do comparativo planejado x realizado por conta no mês.
