@@ -197,11 +197,12 @@ module.exports = cds.service.impl(async function () {
         // Saldos acumulados (conta corrente e poupança) até o fim do mês.
         const acum = await calcularSaldosAcumulados(this, ano, mes, contaTipo);
         const poupanca = acum.poupanca;
-        // Conta corrente = total das contas bancárias (menos o vale), vale = contas tipo VALE.
+        // Saldo na conta = saldo atual: soma de TODAS as contas bancárias (correntes, vale e dinheiro).
+        // O vale segue à parte só como detalhe (contas tipo VALE).
         // Sem contas bancárias cadastradas, cai no cálculo antigo.
         const bancos = await calcularSaldosBancarios(this, ano, mes);
         const contaCorrente = bancos.length
-            ? round2(bancos.filter(b => b.tipo !== 'VALE').reduce((t, b) => t + b.saldo, 0)) : acum.contaCorrente;
+            ? round2(bancos.reduce((t, b) => t + b.saldo, 0)) : acum.contaCorrente;
         const vale = bancos.length
             ? round2(bancos.filter(b => b.tipo === 'VALE').reduce((t, b) => t + b.saldo, 0)) : acum.vale;
 
@@ -292,7 +293,7 @@ module.exports = cds.service.impl(async function () {
             return;
         }
 
-        // CONTA confere o saldo acumulado da conta corrente (o do banco, sem o vale);
+        // CONTA confere o saldo acumulado da conta corrente (todas as contas, vale incluído);
         // POUPANCA confere a reserva do mês.
         let atual;
         if (alvo === 'POUPANCA') {
@@ -842,8 +843,8 @@ async function calcularSaldosAcumulados(srv, ano, mes, contaTipoOpt) {
         SELECT.from(FormasPagamento).columns('ID').where({ tipo: 'VALE' }),
     ]);
 
-    // O que entra ou sai pelo vale (forma de pagamento tipo VALE) não passa pela
-    // conta corrente: fica num saldo à parte.
+    // O que entra ou sai pelo vale (forma de pagamento tipo VALE) conta no saldo
+    // da conta corrente e também fica num detalhe à parte (vale).
     const idsVale = new Set(formasVale.map(f => f.ID));
     let r = 0, d = 0, res = 0, vale = 0;
     for (const l of lancs) {
@@ -852,7 +853,6 @@ async function calcularSaldosAcumulados(srv, ano, mes, contaTipoOpt) {
         if (idsVale.has(l.pagamento_ID)) {
             if (t === 'RECEITA') vale += v;
             else if (t === 'DESPESA') vale -= v;
-            continue;
         }
         if (t === 'RECEITA') r += v;
         else if (t === 'RESERVA') res += v;

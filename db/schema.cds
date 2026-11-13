@@ -165,7 +165,7 @@ entity Lancamentos : cuid, managed {
  * Tipos de conta bancária.
  * - CORRENTE: banco, entra no total do "Saldo na conta".
  * - DINHEIRO: dinheiro em mãos, entra no total.
- * - VALE: vale-alimentação/refeição; saldo à parte ("no vale"), fora do total.
+ * - VALE: vale-alimentação/refeição; entra no saldo total das contas; o saldo do vale aparece também como detalhe ("no vale").
  */
 type TipoContaBancaria : String enum {
     CORRENTE;
